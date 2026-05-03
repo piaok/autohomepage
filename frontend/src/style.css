@@ -1,0 +1,173 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ========================================
+   多主题配色系统
+   6套主题: midnight(深空蓝), daylight(明亮白),
+   forest(森林绿), lavender(薰衣紫),
+   sunset(暮光橙), ocean(深海青)
+   ======================================== */
+
+:root {
+  --card-radius: 12px;
+  /* 默认使用 midnight */
+}
+
+/* ---- 1. 深空蓝 (Midnight) - 默认暗色 ---- */
+.theme-midnight {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-hover: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --accent: #3b82f6;
+  --accent-soft: rgba(59, 130, 246, 0.12);
+  --border: #475569;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --muted: #6b7280;
+  --shadow-card: rgba(0, 0, 0, 0.3);
+  --shadow-dropdown: rgba(0, 0, 0, 0.4);
+  --overlay: rgba(0, 0, 0, 0.1);
+  --logo-color: #f1f5f9;
+}
+
+/* ---- 2. 明亮白 (Daylight) - 浅色 ---- */
+.theme-daylight {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-hover: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --border: #e2e8f0;
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --muted: #9ca3af;
+  --shadow-card: rgba(0, 0, 0, 0.08);
+  --shadow-dropdown: rgba(0, 0, 0, 0.12);
+  --overlay: rgba(0, 0, 0, 0.04);
+  --logo-color: #0f172a;
+}
+
+/* ---- 3. 森林绿 (Forest) ---- */
+.theme-forest {
+  --bg-primary: #0c1f17;
+  --bg-secondary: #163829;
+  --bg-hover: #1e4d3a;
+  --text-primary: #e8f5e9;
+  --text-secondary: #81c784;
+  --accent: #4caf50;
+  --accent-soft: rgba(76, 175, 80, 0.12);
+  --border: #2e7d32;
+  --success: #66bb6a;
+  --warning: #ffb74d;
+  --danger: #ef5350;
+  --muted: #6b7280;
+  --shadow-card: rgba(0, 0, 0, 0.35);
+  --shadow-dropdown: rgba(0, 0, 0, 0.45);
+  --overlay: rgba(0, 0, 0, 0.1);
+  --logo-color: #e8f5e9;
+}
+
+/* ---- 4. 薰衣紫 (Lavender) ---- */
+.theme-lavender {
+  --bg-primary: #1a1035;
+  --bg-secondary: #2d1f5e;
+  --bg-hover: #3d2d7a;
+  --text-primary: #ede9fe;
+  --text-secondary: #a78bfa;
+  --accent: #8b5cf6;
+  --accent-soft: rgba(139, 92, 246, 0.12);
+  --border: #5b21b6;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --muted: #7c7c8a;
+  --shadow-card: rgba(0, 0, 0, 0.35);
+  --shadow-dropdown: rgba(0, 0, 0, 0.45);
+  --overlay: rgba(0, 0, 0, 0.1);
+  --logo-color: #ede9fe;
+}
+
+/* ---- 5. 暮光橙 (Sunset) ---- */
+.theme-sunset {
+  --bg-primary: #1c1008;
+  --bg-secondary: #2d1a0e;
+  --bg-hover: #4a2a16;
+  --text-primary: #fef3c7;
+  --text-secondary: #d4a574;
+  --accent: #f59e0b;
+  --accent-soft: rgba(245, 158, 11, 0.12);
+  --border: #92400e;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --muted: #8b7355;
+  --shadow-card: rgba(0, 0, 0, 0.4);
+  --shadow-dropdown: rgba(0, 0, 0, 0.5);
+  --overlay: rgba(0, 0, 0, 0.1);
+  --logo-color: #fef3c7;
+}
+
+/* ---- 6. 深海青 (Ocean) ---- */
+.theme-ocean {
+  --bg-primary: #042f2e;
+  --bg-secondary: #0d4f4c;
+  --bg-hover: #146e6a;
+  --text-primary: #ccfbf1;
+  --text-secondary: #5eead4;
+  --accent: #14b8a6;
+  --accent-soft: rgba(20, 184, 166, 0.12);
+  --border: #0f766e;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --muted: #6b8f8c;
+  --shadow-card: rgba(0, 0, 0, 0.35);
+  --shadow-dropdown: rgba(0, 0, 0, 0.45);
+  --overlay: rgba(0, 0, 0, 0.1);
+  --logo-color: #ccfbf1;
+}
+
+/* ======================================== */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-hover);
+}

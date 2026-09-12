@@ -109,29 +109,6 @@ async def batch_reorder_services(data: dict):
     }
 
 
-@router.post("/batch/reorder")
-async def batch_reorder_services(data: dict):
-    """批量更新服务排序"""
-    orders = data.get("orders", [])
-    # orders: [{id: "xxx", order: 0}, {id: "yyy", order: 1}, ...]
-    if not orders:
-        raise HTTPException(status_code=400, detail="orders不能为空")
-
-    updated = []
-    for item in orders:
-        sid = item.get("id")
-        order = item.get("order")
-        if sid is not None and order is not None:
-            service = service_manager.update(sid, order=order)
-            if service:
-                updated.append(sid)
-
-    return {
-        "updated": updated,
-        "message": f"已更新 {len(updated)} 个服务排序"
-    }
-
-
 @router.get("/backup/export")
 async def backup_export():
     """导出备份（所有服务+设置）"""
@@ -183,7 +160,7 @@ async def backup_import(data: dict):
         from app.api.settings import _save_persisted_settings
         _save_persisted_settings(settings_data)
 
-    service_manager._save_data()
+    service_manager.save()
 
     return {
         "imported_services": imported_services,

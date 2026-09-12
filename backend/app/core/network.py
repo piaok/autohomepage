@@ -17,7 +17,9 @@ DEFAULT_PRIVATE_RANGES = [
 ]
 
 
-def get_client_ip(request_headers: dict, remote_addr: str, trusted_proxies: List[str] = None) -> str:
+def get_client_ip(request_headers: dict, remote_addr: str,
+                  trusted_proxies: List[str] = None,
+                  trust_forward_headers: bool = False) -> str:
     """
     获取真实的客户端IP地址
 
@@ -25,39 +27,66 @@ def get_client_ip(request_headers: dict, remote_addr: str, trusted_proxies: List
     - X-Forwarded-For (最常用)
     - X-Real-IP
     - CF-Connecting-IP (Cloudflare)
-    - X-Forwarded-Host
+
+    安全策略:
+    - 只有当直连IP(remote_addr)属于可信代理(trusted_proxies)时，
+      才解析转发头中的IP，防止外部伪造 X-Forwarded-For 冒充内网；
+    - trust_forward_headers=True 时无条件信任转发头
+      (仅适用于完全可信的内网环境，不推荐)。
 
     Args:
         request_headers: 请求头字典
         remote_addr: 直接连接的远程地址
         trusted_proxies: 可信代理IP列表
+        trust_forward_headers: 是否无条件信任转发头
 
     Returns:
         客户端真实IP地址
     """
     trusted_proxies = trusted_proxies or []
+    remote = (remote_addr or "").split("%")[0]  # 去掉IPv6 scope id
 
-    # 按优先级检查各种头部
-    x_forwarded_for = request_headers.get("x-forwarded-for")
-    if x_forwarded_for:
-        # X-Forwarded-For 可能包含多个IP，格式: client, proxy1, proxy2
-        # 从左边找到第一个非代理IP
-        ips = [ip.strip() for ip in x_forwarded_for.split(",")]
-        for ip in ips:
-            if ip and ip not in trusted_proxies:
-                return ip
-        # 如果全是代理IP，返回第一个
-        return ips[0] if ips else remote_addr
+    forward_trusted = (
+        trust_forward_headers
+        or remote in trusted_proxies
+        or _ip_in_any(remote, trusted_proxies)
+    )
 
-    x_real_ip = request_headers.get("x-real-ip")
-    if x_real_ip and x_real_ip not in trusted_proxies:
-        return x_real_ip
+    if forward_trusted:
+        # 按优先级检查各种头部
+        x_forwarded_for = request_headers.get("x-forwarded-for")
+        if x_forwarded_for:
+            # X-Forwarded-For 可能包含多个IP，格式: client, proxy1, proxy2
+            # 从左边找到第一个非代理IP
+            ips = [ip.strip() for ip in x_forwarded_for.split(",")]
+            for ip in ips:
+                if ip and ip not in trusted_proxies and not _ip_in_any(ip, trusted_proxies):
+                    return ip
+            # 如果全是代理IP，返回第一个
+            return ips[0] if ips else remote_addr
 
-    cf_connecting_ip = request_headers.get("cf-connecting-ip")
-    if cf_connecting_ip:
-        return cf_connecting_ip
+        x_real_ip = request_headers.get("x-real-ip")
+        if x_real_ip and x_real_ip not in trusted_proxies:
+            return x_real_ip
+
+        cf_connecting_ip = request_headers.get("cf-connecting-ip")
+        if cf_connecting_ip:
+            return cf_connecting_ip
 
     return remote_addr
+
+
+def _ip_in_any(ip_str: str, networks: List[str]) -> bool:
+    """检查IP是否落在任一网段/CIDR中（支持CIDR格式的trusted_proxies）"""
+    if not ip_str:
+        return False
+    for net_str in networks:
+        try:
+            if ipaddress.ip_address(ip_str) in ipaddress.ip_network(net_str, strict=False):
+                return True
+        except (ValueError, TypeError):
+            continue
+    return False
 
 
 def is_private_ip(ip_str: str, custom_ranges: List[str] = None) -> bool:

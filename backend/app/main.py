@@ -33,17 +33,31 @@ async def lifespan(app: FastAPI):
 
         async def periodic_discovery():
             while True:
-                await asyncio.sleep(settings.auto_discovery_interval)
+                # 每轮从持久化设置读取间隔，设置页修改后即时生效
+                try:
+                    from app.api.settings import _load_persisted_settings
+                    interval = int(
+                        _load_persisted_settings().get(
+                            "auto_discovery_interval", settings.auto_discovery_interval
+                        )
+                    )
+                except Exception:
+                    interval = settings.auto_discovery_interval
+                await asyncio.sleep(max(30, interval))
                 await auto_discovery.scan_all()
 
-        # 启动后台任务
-        asyncio.create_task(periodic_discovery())
+        # 启动后台任务（保存引用，避免被垃圾回收取消）
+        discovery_task = asyncio.create_task(periodic_discovery())
+        app.state.discovery_task = discovery_task
         logger.info(f"自动发现任务已启动，间隔: {settings.auto_discovery_interval}秒")
 
     yield
 
     # 关闭时执行
     logger.info("NAS Homepage 关闭中...")
+    task = getattr(app.state, "discovery_task", None)
+    if task:
+        task.cancel()
 
 
 # 创建FastAPI应用
@@ -55,10 +69,11 @@ app = FastAPI(
 )
 
 # CORS配置
+# 局域网工具服务，无需cookie凭据；关掉credentials与通配origin的组合（规范上矛盾）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -99,9 +114,9 @@ if os.path.exists(static_dir):
     @app.get("/{full_path:path}")
     async def spa_fallback(full_path: str):
         """SPA路由回退 - 返回index.html让前端路由处理"""
-        # 尝试匹配静态文件
-        file_path = os.path.join(static_dir, full_path)
-        if os.path.isfile(file_path):
+        # 尝试匹配静态文件（防路径穿越：必须落在 static_dir 内）
+        file_path = os.path.realpath(os.path.join(static_dir, full_path))
+        if os.path.isfile(file_path) and file_path.startswith(os.path.realpath(static_dir) + os.sep):
             return FileResponse(file_path)
         # 否则返回 index.html (SPA fallback)
         return FileResponse(os.path.join(static_dir, "index.html"))

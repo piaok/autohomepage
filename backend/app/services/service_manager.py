@@ -36,18 +36,29 @@ class ServiceManager:
                         self.services[service.id] = service
                 logger.info(f"加载了 {len(self.services)} 个服务")
             except Exception as e:
-                logger.error(f"加载服务数据失败: {e}")
+                # 解析失败时备份损坏文件，避免之后的新数据覆盖、彻底无法恢复
+                backup_file = self.data_file + ".corrupt"
+                try:
+                    os.replace(self.data_file, backup_file)
+                    logger.error(f"加载服务数据失败: {e}，原文件已备份到 {backup_file}")
+                except OSError:
+                    logger.error(f"加载服务数据失败: {e}")
                 self.services = {}
         else:
             logger.info("服务数据文件不存在，创建新的")
             self.services = {}
 
     def _save_data(self):
-        """保存服务数据到文件"""
+        """保存服务数据到文件（原子写入，防止写一半崩溃丢数据）"""
         try:
             data = [service.model_dump() for service in self.services.values()]
-            with open(self.data_file, 'w', encoding='utf-8') as f:
+            tmp_file = self.data_file + ".tmp"
+            with open(tmp_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            # os.replace 是原子操作：要么完整新文件，要么保留旧文件
+            os.replace(tmp_file, self.data_file)
         except Exception as e:
             logger.error(f"保存服务数据失败: {e}")
 
@@ -172,6 +183,10 @@ class ServiceManager:
             if service.container_name == container_name:
                 return service
         return None
+
+    def save(self):
+        """公开的持久化方法（供其他模块调用，避免直接访问 _save_data）"""
+        self._save_data()
 
 
 # 全局实例

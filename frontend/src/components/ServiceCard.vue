@@ -1,10 +1,12 @@
 <template>
   <a
+    ref="rootEl"
     :href="serviceUrl"
     target="_blank"
     rel="noopener noreferrer"
     class="service-card"
     @click.prevent="handleClick"
+    @contextmenu.prevent="handleContextMenu"
   >
     <div class="card-icon" :style="iconBgStyle">
       <img
@@ -43,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import type { Service } from '@/types/service'
 import StatusBadge from './StatusBadge.vue'
 import { getSmartRedirectUrl } from '@/api'
@@ -56,6 +58,7 @@ const props = defineProps<{
 const showMenu = ref(false)
 const iconFailed = ref(false)
 const iconLoaded = ref(false)
+const rootEl = ref<HTMLAnchorElement | null>(null)
 
 // 取前两个字符作为图标
 const initials = computed(() => {
@@ -106,12 +109,15 @@ const networkTagClass = computed(() => {
 })
 
 function handleClick(e: MouseEvent) {
-  if (e.button === 2) {
-    e.preventDefault()
-    showMenu.value = !showMenu.value
+  if (e.metaKey || e.ctrlKey) {
+    // 允许带 Cmd/Ctrl 中键在新标签打开原始链接
     return
   }
   window.open(serviceUrl.value, '_blank')
+}
+
+function handleContextMenu() {
+  showMenu.value = !showMenu.value
 }
 
 function copyLink() {
@@ -122,9 +128,15 @@ function copyLink() {
   showMenu.value = false
 }
 
-document.addEventListener('click', () => {
-  showMenu.value = false
-})
+// 全局点击关闭菜单（精确判断是否点在当前卡片外部），随组件挂载/卸载增减监听器
+function closeOnOutsideClick(e: MouseEvent) {
+  if (showMenu.value && !rootEl.value?.contains(e.target as Node)) {
+    showMenu.value = false
+  }
+}
+
+onMounted(() => document.addEventListener('click', closeOnOutsideClick))
+onUnmounted(() => document.removeEventListener('click', closeOnOutsideClick))
 </script>
 
 <style scoped>

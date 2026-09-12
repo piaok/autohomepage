@@ -1,4 +1,6 @@
 """NAS Homepage - API路由 - 智能跳转"""
+import html
+
 from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import RedirectResponse, HTMLResponse
 
@@ -47,7 +49,8 @@ async def smart_redirect(
     client_ip = get_client_ip(
         dict(request.headers),
         request.client.host if request.client else "unknown",
-        settings.trusted_proxies
+        settings.trusted_proxies,
+        trust_forward_headers=settings.trust_forward_headers,
     )
     network_type = get_network_type(client_ip, settings.custom_lan_ranges)
 
@@ -57,13 +60,13 @@ async def smart_redirect(
     elif service.wan_url:
         url = service.wan_url
     elif service.lan_url:
-        # 外网访问但只有内网地址
+        # 外网访问但只有内网地址 (所有内插值经过HTML转义，防止存储型XSS)
         return HTMLResponse(
             content=f"""
             <!DOCTYPE html>
             <html>
             <head>
-                <title>访问受限 - {service.name}</title>
+                <title>访问受限 - {html.escape(service.name)}</title>
                 <style>
                     body {{ font-family: system-ui, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }}
                     .warning {{ background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 20px; }}
@@ -74,9 +77,9 @@ async def smart_redirect(
             <body>
                 <div class="warning">
                     <h1>⚠️ 服务仅限内网访问</h1>
-                    <p><strong>{service.name}</strong> 只能在局域网内访问。</p>
-                    <p class="info">LAN地址: {service.lan_url}</p>
-                    <p class="info">您的IP: {client_ip} ({network_type})</p>
+                    <p><strong>{html.escape(service.name)}</strong> 只能在局域网内访问。</p>
+                    <p class="info">LAN地址: {html.escape(service.lan_url)}</p>
+                    <p class="info">您的IP: {html.escape(str(client_ip))} ({html.escape(network_type)})</p>
                 </div>
             </body>
             </html>
@@ -96,6 +99,9 @@ async def force_lan_redirect(service_id: str):
     if not service:
         raise HTTPException(status_code=404, detail="服务不存在")
 
+    if not service.is_visible:
+        raise HTTPException(status_code=403, detail="服务已隐藏")
+
     if not service.lan_url:
         raise HTTPException(status_code=400, detail="该服务未配置LAN地址")
 
@@ -109,6 +115,9 @@ async def force_wan_redirect(service_id: str):
     if not service:
         raise HTTPException(status_code=404, detail="服务不存在")
 
+    if not service.is_visible:
+        raise HTTPException(status_code=403, detail="服务已隐藏")
+
     if not service.wan_url:
         raise HTTPException(status_code=400, detail="该服务未配置WAN地址")
 
@@ -121,7 +130,8 @@ async def get_network_info(request: Request):
     client_ip = get_client_ip(
         dict(request.headers),
         request.client.host if request.client else "unknown",
-        settings.trusted_proxies
+        settings.trusted_proxies,
+        trust_forward_headers=settings.trust_forward_headers,
     )
     network_type = get_network_type(client_ip, settings.custom_lan_ranges)
 

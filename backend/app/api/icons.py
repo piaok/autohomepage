@@ -36,7 +36,13 @@ async def proxy_icon(url: str = Query(..., description="图标CDN地址")):
     ]
     from urllib.parse import urlparse
     parsed = urlparse(url)
-    if not any(parsed.hostname and parsed.hostname.endswith(d) for d in allowed_domains):
+    hostname = parsed.hostname or ""
+    # 精确匹配或子域匹配（避免 evil-cdn.jsdelivr.net 之类绕过 endswith）
+    def _domain_allowed(host: str, allow: str) -> bool:
+        return host == allow or host.endswith("." + allow)
+    if parsed.scheme not in ("http", "https") or not any(
+        hostname and _domain_allowed(hostname, d) for d in allowed_domains
+    ):
         raise HTTPException(status_code=403, detail="不允许的域名")
 
     # 检查缓存

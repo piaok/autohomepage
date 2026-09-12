@@ -12,15 +12,18 @@ services:
       - homepage-data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - LUCKY_ENABLED=true
-      - LUCKY_BASE_URL=http://192.168.31.85:16601
-      - LUCKY_API_TOKEN=5!aG@$H4FoDR@xJ6^EdetO#H^*sqSaiQ
-      - DOCKER_ENABLED=true
+      - LUCKY_ENABLED=${LUCKY_ENABLED:-true}
+      # NAS上Lucky的地址（局域网IP，勿用localhost）
+      - LUCKY_BASE_URL=${LUCKY_BASE_URL}
+      # Lucky openToken —— 敏感信息请放在 .env 文件中（已被 .gitignore 排除），切勿明文提交
+      - LUCKY_API_TOKEN=${LUCKY_API_TOKEN}
+      - DOCKER_ENABLED=${DOCKER_ENABLED:-true}
       - DOCKER_SOCKET=/var/run/docker.sock
-      - AUTO_DISCOVERY_INTERVAL=300
+      - AUTO_DISCOVERY_INTERVAL=${AUTO_DISCOVERY_INTERVAL:-300}
+      - NAS_LAN_IP=${NAS_LAN_IP:-}
       - THEME_DEFAULT=dark
-      - TRUSTED_PROXIES=[]
-      - CUSTOM_LAN_RANGES=[]
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-[]}
+      - CUSTOM_LAN_RANGES=${CUSTOM_LAN_RANGES:-[]}
     networks:
       - default
 

@@ -188,14 +188,24 @@ class AutoDiscovery:
         total_found = 0
 
         try:
+            # 读取热更新开关（设置页持久化 > 环境变量）
+            try:
+                from app.api.settings import _load_persisted_settings
+                _persisted = _load_persisted_settings()
+                lucky_enabled = _persisted.get("lucky_enabled", settings.lucky_enabled)
+                docker_enabled = _persisted.get("docker_enabled", settings.docker_enabled)
+            except Exception:
+                lucky_enabled = settings.lucky_enabled
+                docker_enabled = settings.docker_enabled
+
             # 1. 扫描Lucky
-            if settings.lucky_enabled:
+            if lucky_enabled:
                 lucky_count = await self._scan_lucky()
                 total_found += lucky_count
                 logger.info(f"Lucky扫描完成, 发现 {lucky_count} 个服务")
 
             # 2. 扫描Docker
-            if settings.docker_enabled:
+            if docker_enabled:
                 docker_count = await self._scan_docker()
                 total_found += docker_count
                 logger.info(f"Docker扫描完成, 发现 {docker_count} 个服务")
@@ -359,7 +369,7 @@ class AutoDiscovery:
         使用容器内可达地址（网关IP），而非用户访问地址（NAS局域网IP）
         """
         services = service_manager.get_all(include_hidden=True)
-        async with httpx.AsyncClient(timeout=5.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=5.0, verify=settings.health_check_verify_tls) as client:
             for service in services:
                 check_url = self._get_check_url(service)
 
@@ -377,7 +387,7 @@ class AutoDiscovery:
                     service_manager.update_status(service.id, ServiceStatus.OFFLINE)
 
         # 批量保存状态
-        service_manager._save_data()
+        service_manager.save()
 
     async def check_service_status(self, service_id: str) -> str:
         """检查单个服务状态"""
@@ -391,20 +401,33 @@ class AutoDiscovery:
             return "unknown"
 
         try:
-            async with httpx.AsyncClient(timeout=5.0, verify=False) as client:
+            async with httpx.AsyncClient(timeout=5.0, verify=settings.health_check_verify_tls) as client:
                 response = await client.get(check_url, follow_redirects=True)
                 status = ServiceStatus.ONLINE if response.status_code < 500 else ServiceStatus.OFFLINE
         except Exception:
             status = ServiceStatus.OFFLINE
 
         service_manager.update_status(service_id, status)
-        service_manager._save_data()
+        service_manager.save()
         return status.value
 
     def _get_lucky_client(self) -> LuckyClient:
-        """获取Lucky客户端实例"""
-        if self._lucky_client is None:
-            self._lucky_client = LuckyClient()
+        """获取Lucky客户端实例（每次读取持久化设置，设置页修改后即时生效）"""
+        try:
+            from app.api.settings import _load_persisted_settings
+            persisted = _load_persisted_settings()
+        except Exception:
+            persisted = {}
+        base_url = persisted.get("lucky_base_url") or settings.lucky_base_url
+        open_token = persisted.get("lucky_api_token") or settings.lucky_api_token
+        # 配置变化时重建客户端（客户端内会缓存解析后的API地址）
+        cache_key = f"{base_url}|{open_token}"
+        if self._lucky_client is None or getattr(self._lucky_client, '_config_key', None) != cache_key:
+            if self._lucky_client:
+                self._lucky_client.client.close()
+            client = LuckyClient(base_url=base_url, open_token=open_token)
+            client._config_key = cache_key
+            self._lucky_client = client
         return self._lucky_client
 
 

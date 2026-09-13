@@ -14,6 +14,8 @@ export interface Service {
   is_visible: boolean
   status: 'online' | 'offline' | 'checking' | 'unknown'
   last_check?: string
+  is_deleted?: boolean
+  deleted_at?: string
 }
 
 export interface NetworkInfo {

@@ -109,10 +109,56 @@ async def batch_reorder_services(data: dict):
     }
 
 
+# === 回收站 ===
+
+
+@router.get("/recycle/list")
+async def get_recycle_bin():
+    """获取回收站中的服务"""
+    services = service_manager.get_deleted()
+    return [s.model_dump(mode="json") for s in services]
+
+
+@router.post("/recycle/{service_id}/restore")
+async def restore_from_recycle(service_id: str):
+    """从回收站恢复服务"""
+    if not service_manager.restore(service_id):
+        raise HTTPException(status_code=404, detail="回收站中找不到该服务")
+    service = service_manager.get(service_id)
+    return {"message": f"已恢复: {service.name}", "service": service.model_dump(mode="json")}
+
+
+@router.post("/recycle/{service_id}/purge")
+async def purge_from_recycle(service_id: str):
+    """永久删除回收站中的服务"""
+    service = service_manager.get(service_id)
+    if not service or not service.is_deleted:
+        raise HTTPException(status_code=404, detail="回收站中找不到该服务")
+    name = service.name
+    service_manager.purge(service_id)
+    return {"message": f"已永久删除: {name}"}
+
+
+@router.post("/recycle/purge-all")
+async def purge_all_recycle():
+    """清空回收站"""
+    count = service_manager.empty_recycle_bin()
+    return {"purged": count, "message": f"已清空回收站 {count} 个服务"}
+
+
+@router.post("/dedupe")
+async def dedupe_services():
+    """一键去重：同内网IP:端口的服务合并为一个，多余项进入回收站"""
+    removed = service_manager.dedupe()
+    return {"removed": removed, "message": f"已合并 {removed} 个重复服务（可在回收站还原）"}
+
+
 @router.get("/backup/export")
 async def backup_export():
     """导出备份（所有服务+设置）"""
-    services_data = [s.model_dump() for s in service_manager.get_all(include_hidden=True)]
+    services_data = [
+        s.model_dump(mode="json") for s in service_manager.get_all(include_hidden=True)
+    ]
 
     # 加载设置
     from app.api.settings import _load_persisted_settings

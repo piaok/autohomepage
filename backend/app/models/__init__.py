@@ -52,6 +52,10 @@ class Service(BaseModel):
     order: int = Field(0, description="排序")
     is_visible: bool = Field(True, description="是否显示")
 
+    # 回收站 (软删除)
+    is_deleted: bool = Field(False, description="是否已删除(回收站中)")
+    deleted_at: Optional[datetime] = Field(None, description="删除时间")
+
     # 状态 (动态)
     status: ServiceStatus = Field(ServiceStatus.UNKNOWN, description="状态")
     last_check: Optional[datetime] = Field(None, description="最后检测时间")

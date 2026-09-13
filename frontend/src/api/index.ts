@@ -35,6 +35,30 @@ export async function reorderServices(orders: { id: string; order: number }[]): 
   await api.post('/services/batch/reorder', { orders })
 }
 
+// 回收站API
+export async function fetchRecycleBin(): Promise<Service[]> {
+  const { data } = await api.get('/services/recycle/list')
+  return data
+}
+
+export async function restoreFromRecycle(id: string): Promise<void> {
+  await api.post(`/services/recycle/${id}/restore`)
+}
+
+export async function purgeFromRecycle(id: string): Promise<void> {
+  await api.post(`/services/recycle/${id}/purge`)
+}
+
+export async function purgeAllRecycle(): Promise<number> {
+  const { data } = await api.post('/services/recycle/purge-all')
+  return data.purged
+}
+
+export async function dedupeServices(): Promise<number> {
+  const { data } = await api.post('/services/dedupe')
+  return data.removed
+}
+
 // 自动发现API
 export async function triggerDiscovery() {
   const { data } = await api.post('/discovery/scan')

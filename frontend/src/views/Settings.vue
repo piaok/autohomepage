@@ -20,6 +20,7 @@
               <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
               全选
             </label>
+            <button @click="handleDedupe" class="btn-sm" title="同内网IP:端口的服务合并为一个">🔀 去重</button>
             <button v-if="selectedIds.length" @click="batchDelete" class="btn-sm btn-danger">
               删除 ({{ selectedIds.length }})
             </button>
@@ -143,6 +144,29 @@
         </div>
       </section>
 
+      <!-- Recycle Bin -->
+      <section v-if="recycle.length > 0" class="settings-section">
+        <div class="section-header-row">
+          <h2>🗑️ 回收站 ({{ recycle.length }})</h2>
+          <div class="header-actions">
+            <button @click="handlePurgeAll" class="btn-sm btn-danger">清空回收站</button>
+          </div>
+        </div>
+        <div class="section-body">
+          <div class="recycle-list">
+            <div v-for="s in recycle" :key="s.id" class="recycle-item">
+              <span class="service-name">{{ s.name }}</span>
+              <span class="recycle-time">{{ formatRecycleTime(s.deleted_at) }}</span>
+              <div class="recycle-actions">
+                <button @click="handleRestore(s.id)" class="btn-sm">↩️ 恢复</button>
+                <button @click="handlePurge(s.id)" class="btn-sm btn-danger">彻底删除</button>
+              </div>
+            </div>
+          </div>
+          <p class="hint" style="margin-top:8px">已删除的服务保留在此处，自动发现不会重新创建它们。彻底删除后不可恢复。</p>
+        </div>
+      </section>
+
       <!-- Backup & Restore -->
       <section class="settings-section">
         <h2>备份与恢复</h2>
@@ -213,7 +237,10 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { useServiceStore } from '@/stores/services'
-import { createService, updateService, deleteService as apiDeleteService } from '@/api'
+import {
+  createService, updateService, deleteService as apiDeleteService,
+  fetchRecycleBin, restoreFromRecycle, purgeFromRecycle, purgeAllRecycle, dedupeServices,
+} from '@/api'
 import type { Service } from '@/types/service'
 import StatusBadge from '@/components/StatusBadge.vue'
 
@@ -234,6 +261,74 @@ const showAddForm = ref(false)
 const editingId = ref<string | null>(null)
 const selectedIds = ref<string[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
+
+// 回收站
+const recycle = ref<Service[]>([])
+
+function formatRecycleTime(t?: string): string {
+  if (!t) return ''
+  const d = new Date(t)
+  const diff = Date.now() - d.getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '刚刚'
+  if (mins < 60) return `${mins} 分钟前`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours} 小时前`
+  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+async function loadRecycle() {
+  try {
+    recycle.value = await fetchRecycleBin()
+  } catch (e) {
+    console.error('加载回收站失败:', e)
+  }
+}
+
+async function handleRestore(id: string) {
+  try {
+    await restoreFromRecycle(id)
+    await Promise.all([store.loadServices(), loadRecycle()])
+  } catch (e) {
+    console.error('恢复失败:', e)
+    alert('恢复失败')
+  }
+}
+
+async function handlePurge(id: string) {
+  if (!confirm('彻底删除后不可恢复，确定继续？')) return
+  try {
+    await purgeFromRecycle(id)
+    await loadRecycle()
+  } catch (e) {
+    console.error('彻底删除失败:', e)
+  }
+}
+
+async function handlePurgeAll() {
+  if (!confirm(`清空回收站将永久删除 ${recycle.value.length} 个服务，确定继续？`)) return
+  try {
+    await purgeAllRecycle()
+    await loadRecycle()
+  } catch (e) {
+    console.error('清空回收站失败:', e)
+  }
+}
+
+async function handleDedupe() {
+  if (deduping.value) return
+  deduping.value = true
+  try {
+    const removed = await dedupeServices()
+    await Promise.all([store.loadServices(), loadRecycle()])
+    alert(removed > 0 ? `已合并 ${removed} 个重复服务（可在回收站还原）` : '没有发现重复服务')
+  } catch (e) {
+    console.error('去重失败:', e)
+    alert('去重失败')
+  }
+  deduping.value = false
+}
+const deduping = ref(false)
 
 const form = reactive({
   name: '',
@@ -283,7 +378,7 @@ async function batchDelete() {
       body: JSON.stringify({ ids: selectedIds.value }),
     })
     selectedIds.value = []
-    await store.loadServices()
+    await Promise.all([store.loadServices(), loadRecycle()])
   } catch (e) {
     console.error('批量删除失败:', e)
   }
@@ -391,11 +486,11 @@ async function saveService() {
 }
 
 async function deleteService(id: string) {
-  if (!confirm('确定删除此服务？')) return
+  if (!confirm('确定删除此服务？删除后可在回收站恢复。')) return
   try {
     await apiDeleteService(id)
     if (editingId.value === id) cancelForm()
-    await store.loadServices()
+    await Promise.all([store.loadServices(), loadRecycle()])
   } catch (e) {
     console.error('删除失败:', e)
   }
@@ -522,6 +617,7 @@ const appVersion = ref('')
 onMounted(async () => {
   // 加载服务列表（确保隐藏服务也显示在编辑页）
   await store.loadServices()
+  await loadRecycle()
   
   try {
     const res = await fetch('/api/settings')
@@ -642,17 +738,41 @@ onMounted(async () => {
 }
 
 .service-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
   margin-bottom: 12px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .service-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .service-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 .service-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--overlay);
   transition: all 0.2s;
   cursor: default;
+}
+
+/* 编辑卡片展开时占满整行 */
+.service-item.editing,
+.service-item.drag-over {
+  grid-column: 1 / -1;
 }
 
 .service-item.dragging {
@@ -662,6 +782,87 @@ onMounted(async () => {
 .service-item.drag-over {
   border-top: 2px solid var(--accent);
   padding-top: 8px;
+}
+
+.service-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.service-info .service-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.service-info .badge-manual,
+.service-info [class^="badge-"],
+.service-info [class*=" badge-"] {
+  flex-shrink: 0;
+}
+
+.service-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.service-actions .btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* 回收站 */
+.recycle-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 1100px) {
+  .recycle-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .recycle-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.recycle-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  opacity: 0.85;
+}
+
+.recycle-item .service-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recycle-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.recycle-actions {
+  display: flex;
+  gap: 6px;
 }
 
 .drag-handle {

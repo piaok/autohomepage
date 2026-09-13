@@ -682,9 +682,10 @@ onMounted(async () => {
 }
 
 .settings-content {
-  max-width: 800px;
+  /* PC宽屏更宽(留出多列空间)，移动端自适应收窄 */
+  max-width: min(1200px, 100vw - 16px);
   margin: 0 auto;
-  padding: 24px;
+  padding: 16px;
 }
 
 .settings-section {
@@ -739,22 +740,11 @@ onMounted(async () => {
 
 .service-list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* 自适应列数：每个卡片最小约340px，放得下几列就几列，排满自动换行 */
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   gap: 10px;
   margin-bottom: 12px;
-  align-items: start;
-}
-
-@media (max-width: 1100px) {
-  .service-list {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 700px) {
-  .service-list {
-    grid-template-columns: 1fr;
-  }
+  align-items: stretch;
 }
 
 .service-item {
@@ -767,6 +757,7 @@ onMounted(async () => {
   background: var(--overlay);
   transition: all 0.2s;
   cursor: default;
+  min-width: 0; /* 允许在网格轨道内收缩，防止挤到页面外 */
 }
 
 /* 编辑卡片展开时占满整行 */
@@ -788,15 +779,17 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: wrap; /* 名称/徽章/状态放不下时自动换行到下一行 */
   min-width: 0;
+  flex: 1;
 }
 
 .service-info .service-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 140px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .service-info .badge-manual,
@@ -821,20 +814,9 @@ onMounted(async () => {
 /* 回收站 */
 .recycle-list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* 与服务列表一致的自适应列数，排满自动换行 */
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: 10px;
-}
-
-@media (max-width: 1100px) {
-  .recycle-list {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 700px) {
-  .recycle-list {
-    grid-template-columns: 1fr;
-  }
 }
 
 .recycle-item {

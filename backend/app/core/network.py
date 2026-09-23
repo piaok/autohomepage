@@ -29,8 +29,11 @@ def get_client_ip(request_headers: dict, remote_addr: str,
     - CF-Connecting-IP (Cloudflare)
 
     安全策略:
-    - 只有当直连IP(remote_addr)属于可信代理(trusted_proxies)时，
-      才解析转发头中的IP，防止外部伪造 X-Forwarded-For 冒充内网；
+    - 直连IP(remote_addr)是内网/回环地址时(前面是本机或局域网反代，
+      如Docker网关、Caddy、Nginx、Lucky)，信任转发头中的IP；
+    - 也可通过 trusted_proxies 显式指定可信代理(支持CIDR)；
+    - 外网直连(对端为公网IP)时不解析转发头，
+      防止外部伪造 X-Forwarded-For 冒充内网；
     - trust_forward_headers=True 时无条件信任转发头
       (仅适用于完全可信的内网环境，不推荐)。
 
@@ -50,6 +53,9 @@ def get_client_ip(request_headers: dict, remote_addr: str,
         trust_forward_headers
         or remote in trusted_proxies
         or _ip_in_any(remote, trusted_proxies)
+        # 默认信任来自内网/回环的直连对端(反代部署开箱即用)；
+        # 这类对端本身就处于受信网络，伪造转发头无法由外网到达
+        or (remote not in ("", "unknown") and is_private_ip(remote))
     )
 
     if forward_trusted:
